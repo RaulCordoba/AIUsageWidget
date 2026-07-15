@@ -1,0 +1,84 @@
+<Window x:Class="AIUsageWidget.App.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:converters="clr-namespace:AIUsageWidget.App.Converters"
+        Title="Configuracion"
+        Width="520"
+        Height="650"
+        WindowStartupLocation="CenterOwner"
+        Background="#202124">
+    <Window.Resources>
+        <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+    </Window.Resources>
+    <ScrollViewer>
+        <StackPanel Margin="18">
+            <TextBlock Text="Configuracion" Foreground="White" FontSize="22" FontWeight="SemiBold" Margin="0,0,0,16" />
+
+            <TextBlock Text="General" Foreground="#B8FFFFFF" FontWeight="SemiBold" />
+            <CheckBox Content="Iniciar con Windows" IsChecked="{Binding Settings.StartWithWindows}" Foreground="White" Margin="0,8,0,0" />
+            <CheckBox Content="Siempre visible" IsChecked="{Binding Settings.AlwaysOnTop}" Foreground="White" />
+            <CheckBox Content="Mostrar en barra de tareas" IsChecked="{Binding Settings.ShowInTaskbar}" Foreground="White" />
+            <CheckBox Content="Minimizar a bandeja" IsChecked="{Binding Settings.MinimizeToTray}" Foreground="White" />
+            <CheckBox Content="Modo compacto predeterminado" IsChecked="{Binding Settings.CompactMode}" Foreground="White" />
+            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                <TextBlock Text="Intervalo (s)" Foreground="White" Width="130" VerticalAlignment="Center" />
+                <TextBox Text="{Binding Settings.RefreshIntervalSeconds, UpdateSourceTrigger=PropertyChanged}" Width="80" />
+            </StackPanel>
+
+            <TextBlock Text="Apariencia" Foreground="#B8FFFFFF" FontWeight="SemiBold" Margin="0,18,0,0" />
+            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                <TextBlock Text="Opacidad" Foreground="White" Width="130" VerticalAlignment="Center" />
+                <Slider Minimum="0.35" Maximum="1" Value="{Binding Settings.Opacity}" Width="220" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Escala" Foreground="White" Width="130" VerticalAlignment="Center" />
+                <Slider Minimum="0.75" Maximum="2" Value="{Binding Settings.Scale}" Width="220" />
+            </StackPanel>
+
+            <TextBlock Text="Proveedores" Foreground="#B8FFFFFF" FontWeight="SemiBold" Margin="0,18,0,0" />
+            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                <ComboBox ItemsSource="{Binding ProviderIds}" SelectedItem="{Binding Settings.SelectedProviderId}" Width="180" SelectionChanged="ProviderComboBox_SelectionChanged" />
+                <Button Command="{Binding ToggleProviderHelpCommand}"
+                        Width="28"
+                        Height="24"
+                        Padding="0"
+                        Margin="8,0,0,0"
+                        ToolTip="Como obtener el dato necesario">
+                    <TextBlock Text="&#xE946;" FontFamily="Segoe MDL2 Assets" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Button>
+            </StackPanel>
+            <Border Visibility="{Binding IsProviderHelpVisible, Converter={StaticResource BooleanToVisibilityConverter}}"
+                    Background="#18191C"
+                    BorderBrush="#3AFFFFFF"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="10"
+                    Margin="0,8,0,0">
+                <TextBlock Text="{Binding ProviderHelpText}" Foreground="#D8FFFFFF" TextWrapping="Wrap" />
+            </Border>
+            <PasswordBox x:Name="ClaudeSessionBox"
+                         Margin="0,10,0,0"
+                         PasswordChanged="ClaudeSessionBox_PasswordChanged"
+                         GotKeyboardFocus="ClaudeSessionBox_GotKeyboardFocus" />
+            <TextBlock Text="La sesion de Claude se guarda en Windows Credential Manager. La integracion es no oficial y puede fallar si Claude cambia sus endpoints." Foreground="#B8FFFFFF" TextWrapping="Wrap" Margin="0,6,0,0" />
+            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                <Button Content="Comprobar conexion" Command="{Binding TestProviderCommand}" />
+                <Button Content="Eliminar credenciales" Command="{Binding DeleteClaudeCredentialsCommand}" Margin="8,0,0,0" />
+            </StackPanel>
+
+            <TextBlock Text="Alertas e historico" Foreground="#B8FFFFFF" FontWeight="SemiBold" Margin="0,18,0,0" />
+            <CheckBox Content="Activar notificaciones" IsChecked="{Binding Settings.NotificationsEnabled}" Foreground="White" Margin="0,8,0,0" />
+            <CheckBox Content="Activar historico" IsChecked="{Binding Settings.HistoryEnabled}" Foreground="White" />
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Retencion (dias)" Foreground="White" Width="130" VerticalAlignment="Center" />
+                <TextBox Text="{Binding Settings.HistoryRetentionDays, UpdateSourceTrigger=PropertyChanged}" Width="80" />
+            </StackPanel>
+
+            <TextBlock Text="{Binding Status}" Foreground="#B8FFFFFF" Margin="0,18,0,8" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="Guardar" Command="{Binding SaveCommand}" Width="92" />
+                <Button Content="Cerrar" Click="Close_Click" Width="92" Margin="8,0,0,0" />
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</Window>

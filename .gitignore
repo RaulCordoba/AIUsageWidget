@@ -1,0 +1,37 @@
+bin/
+obj/
+.vs/
+.dotnet/
+.agents/
+.codex/
+.git_backup_codex/
+TestResults/
+*.user
+*.suo
+*.nupkg
+*.log
+publish/
+artifacts/
+Capture/
+*.pdb
+*.cache
+*.tmp
+*.bak
+
+# Local runtime data. The app writes real user settings to %LOCALAPPDATA%,
+# but keep these ignored in case someone runs it from the repo root.
+settings.json
+providers.json
+window-state.json
+notifications.json
+history/
+logs/
+
+# Sensitive material
+*.key
+*.pem
+*.pfx
+*.cer
+*.crt
+*.env
+.env
