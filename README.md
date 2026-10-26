@@ -6,6 +6,8 @@ The macOS version includes native WebKit, menu-bar integration, notifications, l
 
 ## Screenshots
 
+![AI Usage Widget on Windows and macOS](docs/images/Capturas_Windows_y_Mac.png)
+
 ![Compact widget](docs/images/widget-compact_V2.png)
 
 ![Settings window](docs/images/widget-settings.png)
