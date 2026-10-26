@@ -1,6 +1,8 @@
 # AI Usage Widget
 
-AI Usage Widget is a native Windows desktop widget for monitoring AI provider usage in a compact, always-on-top interface. It is built with C#, .NET 8, WPF and MVVM, stores data locally without a database, and protects sensitive provider credentials with Windows security mechanisms.
+AI Usage Widget monitors AI provider usage in a compact, floating desktop interface. The Windows application uses WPF; the macOS application uses Avalonia with the same layout, compact/expanded views and shared monitoring logic. Both use C#, .NET 8 and local JSON storage. Credentials are protected by Windows Credential Manager or the macOS login Keychain.
+
+The macOS port includes native WebKit, menu-bar integration, notifications, login startup, and Apple Silicon/Intel packaging. See [macOS build and validation](docs/macos.md) for instructions and the validation still required on a Mac.
 
 ## Screenshots
 
@@ -11,7 +13,7 @@ AI Usage Widget is a native Windows desktop widget for monitoring AI provider us
 ## Repository Description
 
 ```text
-Native Windows 11-style WPF widget for monitoring AI usage limits, starting with Claude and a safe demo provider. Built with .NET 8, MVVM, local JSON storage and Windows Credential Manager.
+Windows and macOS widget for monitoring AI usage limits, with Claude and Demo providers. Built with .NET 8, WPF/Avalonia, local JSON storage and system credential stores.
 ```
 
 ## Features
@@ -21,17 +23,34 @@ Native Windows 11-style WPF widget for monitoring AI usage limits, starting with
 - Demo provider for running the app without credentials.
 - Claude provider isolated behind a non-official integration.
 - Local settings and history stored as JSON files.
-- Sensitive credentials stored outside JSON using Windows Credential Manager.
+- Sensitive credentials stored outside JSON using Windows Credential Manager or macOS Keychain.
 - System tray icon with quick actions.
 - Configurable refresh interval, opacity, scale, notifications and startup behavior.
 - No database, no external server, no telemetry.
 
 ## Requirements
 
+### Windows
+
 - Windows 10/11.
 - Visual Studio 2022 with the .NET Desktop Development workload.
 - .NET 8 SDK.
 - WebView2 Runtime for the Claude browser fallback.
+
+### macOS
+
+- macOS 12 or later is the packaging target; actual OS/device support must be validated on the intended Macs.
+- .NET 8 SDK and Xcode Command Line Tools to build. Published apps include the .NET runtime.
+- Apple Silicon (`osx-arm64`) or Intel (`osx-x64`).
+
+```bash
+dotnet test AIUsageWidget.Mac.slnf -c Release
+bash scripts/Build-Mac.sh osx-arm64
+# For Intel:
+bash scripts/Build-Mac.sh osx-x64
+```
+
+The script creates `artifacts/macos/AIUsageWidget-<runtime>.zip`, containing `AI Usage Widget.app`. Build on macOS so the Swift/WebKit helper is compiled and the complete bundle is signed. The Windows build/publish/installer commands below remain available.
 
 ## Build
 
@@ -75,8 +94,9 @@ artifacts\installer\AIUsageWidget-Setup.exe
 ## Project Structure
 
 - `src/AIUsageWidget.App`: WPF UI, ViewModels, tray icon, windows and application services.
+- `src/AIUsageWidget.Desktop`: Avalonia macOS UI, native menu bar, WebKit/notification helper and platform integration. It shares the settings ViewModel and monitor service with Windows.
 - `src/AIUsageWidget.Core`: models, interfaces, provider contracts and business rules.
-- `src/AIUsageWidget.Infrastructure`: local JSON storage, atomic writes, Credential Manager, logging and Windows startup.
+- `src/AIUsageWidget.Infrastructure`: local JSON storage, atomic writes, platform credential stores, logging and login startup.
 - `src/AIUsageWidget.Providers`: Demo and Claude provider implementations.
 - `tests`: unit tests without real provider accounts.
 
@@ -99,11 +119,13 @@ logs\
 
 Credentials are not stored in those JSON files. Provider secrets are stored through Windows Credential Manager.
 
+On macOS, data lives in `~/Library/Application Support/AIUsageWidget/` and secrets live in the login Keychain. The `startWithWindows` JSON field is retained for backward compatibility and means “start at login” on macOS.
+
 ## Claude Integration
 
 Claude currently does not provide a stable official usage API for this widget. The Claude provider uses isolated, defensive calls to Claude web endpoints and may break if Claude changes its internal API or authentication behavior.
 
-The app never sends Claude credentials to a custom server. The session value is stored locally in Windows Credential Manager and is not written to logs.
+The app never sends Claude credentials to a custom server. The session value is stored locally in Windows Credential Manager or macOS Keychain and is not written to logs.
 
 If Claude returns an unsupported format, blocks the request, or the session expires, the UI reports that the usage data is unavailable or that login is required again.
 

@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\AIUsageWidget.Core\AIUsageWidget.Core.csproj" />
+    <ProjectReference Include="..\..\src\AIUsageWidget.Providers\AIUsageWidget.Providers.csproj" />
   </ItemGroup>
 
   <ItemGroup>

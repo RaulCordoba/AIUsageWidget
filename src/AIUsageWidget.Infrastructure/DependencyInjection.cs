@@ -7,13 +7,11 @@ using AIUsageWidget.Infrastructure.Security;
 using AIUsageWidget.Infrastructure.Settings;
 using AIUsageWidget.Infrastructure.SystemServices;
 using Microsoft.Extensions.DependencyInjection;
-using System.Runtime.Versioning;
 
 namespace AIUsageWidget.Infrastructure;
 
 public static class DependencyInjection
 {
-    [SupportedOSPlatform("windows")]
     public static IServiceCollection AddInfrastructure(this IServiceCollection services)
     {
         services.AddSingleton<LocalAppPaths>();
@@ -23,8 +21,20 @@ public static class DependencyInjection
         services.AddSingleton<ISettingsStore, JsonSettingsStore>();
         services.AddSingleton<INotificationStateStore, JsonNotificationStateStore>();
         services.AddSingleton<IHistoryStore, JsonHistoryStore>();
-        services.AddSingleton<ISecureCredentialStore, WindowsCredentialStore>();
-        services.AddSingleton<IStartupService, RegistryStartupService>();
+        if (OperatingSystem.IsWindows())
+        {
+            services.AddSingleton<ISecureCredentialStore, WindowsCredentialStore>();
+            services.AddSingleton<IStartupService, RegistryStartupService>();
+        }
+        else if (OperatingSystem.IsMacOS())
+        {
+            services.AddSingleton<ISecureCredentialStore, MacKeychainCredentialStore>();
+            services.AddSingleton<IStartupService, MacStartupService>();
+        }
+        else
+        {
+            throw new PlatformNotSupportedException("AI Usage Widget admite Windows y macOS.");
+        }
         return services;
     }
 }

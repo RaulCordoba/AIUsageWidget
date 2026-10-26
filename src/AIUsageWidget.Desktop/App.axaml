@@ -1,0 +1,24 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="AIUsageWidget.App.App" Name="AI Usage Widget" RequestedThemeVariant="Dark">
+  <Application.Resources>
+    <SolidColorBrush x:Key="WidgetBackgroundBrush" Color="#E61C1C1E" />
+    <SolidColorBrush x:Key="SubtleBorderBrush" Color="#3AFFFFFF" />
+    <SolidColorBrush x:Key="MutedTextBrush" Color="#B8FFFFFF" />
+  </Application.Resources>
+  <Application.Styles>
+    <FluentTheme />
+    <Style Selector="Button">
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="Background" Value="#25262A" />
+      <Setter Property="BorderBrush" Value="#3AFFFFFF" />
+      <Setter Property="Padding" Value="10,6" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="ProgressBar">
+      <Setter Property="Height" Value="12" />
+      <Setter Property="Foreground" Value="#FB923C" />
+      <Setter Property="Background" Value="#2F3035" />
+    </Style>
+  </Application.Styles>
+</Application>

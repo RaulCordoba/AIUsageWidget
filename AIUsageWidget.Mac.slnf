@@ -1,0 +1,14 @@
+{
+  "solution": {
+    "path": "AIUsageWidget.sln",
+    "projects": [
+      "src\\AIUsageWidget.Core\\AIUsageWidget.Core.csproj",
+      "src\\AIUsageWidget.Infrastructure\\AIUsageWidget.Infrastructure.csproj",
+      "src\\AIUsageWidget.Providers\\AIUsageWidget.Providers.csproj",
+      "src\\AIUsageWidget.Desktop\\AIUsageWidget.Desktop.csproj",
+      "tests\\AIUsageWidget.Core.Tests\\AIUsageWidget.Core.Tests.csproj",
+      "tests\\AIUsageWidget.Infrastructure.Tests\\AIUsageWidget.Infrastructure.Tests.csproj",
+      "tests\\AIUsageWidget.Desktop.Tests\\AIUsageWidget.Desktop.Tests.csproj"
+    ]
+  }
+}

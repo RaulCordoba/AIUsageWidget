@@ -61,7 +61,7 @@ public partial class SettingsWindow : Window
             await _viewModel.SaveCommand.ExecuteAsync(null);
         }
 
-        Close();
+        if (_viewModel.LastSaveSucceeded) Close();
     }
 
     private void RefreshCredentialMask()

@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../AIUsageWidget.Core/AIUsageWidget.Core.csproj" />
+    <ProjectReference Include="../AIUsageWidget.Infrastructure/AIUsageWidget.Infrastructure.csproj" />
+    <ProjectReference Include="../AIUsageWidget.Providers/AIUsageWidget.Providers.csproj" />
+    <Compile Include="../AIUsageWidget.App/Services/UsageMonitorService.cs" Link="Services/UsageMonitorService.cs" />
+    <Compile Include="../AIUsageWidget.App/ViewModels/SettingsViewModel.cs" Link="ViewModels/SettingsViewModel.cs" />
+    <AvaloniaResource Include="Assets/**" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.9" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.9" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.9" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
+  </ItemGroup>
+</Project>

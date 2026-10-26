@@ -12,7 +12,9 @@ Do not commit:
 - Certificates or private keys.
 - Published binaries and installer artifacts.
 
-The application stores sensitive provider credentials through Windows Credential Manager. Normal settings and history are stored locally under `%LOCALAPPDATA%\AIUsageWidget`.
+The application stores sensitive provider credentials through Windows Credential Manager on Windows and the user's default Keychain on macOS. Normal settings and history are stored locally under `%LOCALAPPDATA%\AIUsageWidget` or `~/Library/Application Support/AIUsageWidget/` respectively.
+
+The macOS WebKit helper receives credentials only through an anonymous stdin pipe, uses an ephemeral browser data store, and does not include secrets in process arguments or diagnostics. Signing certificates and notarization credentials must remain outside the repository.
 
 ## Claude Integration
 

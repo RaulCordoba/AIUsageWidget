@@ -1,0 +1,48 @@
+name: macOS build and tests
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  macos:
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            rid: osx-arm64
+          - runner: macos-15-intel
+            rid: osx-x64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Prepare isolated test Keychain
+        run: |
+          keychain="$RUNNER_TEMP/AIUsageWidget-tests.keychain-db"
+          security create-keychain -p '' "$keychain"
+          security unlock-keychain -p '' "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security list-keychains -d user -s "$keychain"
+          security default-keychain -d user -s "$keychain"
+      - name: Test shared logic and desktop UI
+        timeout-minutes: 5
+        env:
+          AIUSAGEWIDGET_MAC_INTEGRATION: '1'
+        run: dotnet test AIUsageWidget.Mac.slnf -c Release
+      - name: Build native helper and application bundle
+        run: bash scripts/Build-Mac.sh ${{ matrix.rid }}
+      - name: Launch packaged application in Demo mode
+        run: |
+          "publish/${{ matrix.rid }}/AI Usage Widget.app/Contents/MacOS/AIUsageWidget.Desktop" --smoke-test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AIUsageWidget-${{ matrix.rid }}
+          path: |
+            artifacts/macos/AIUsageWidget-${{ matrix.rid }}.zip
+            artifacts/macos/AIUsageWidget-${{ matrix.rid }}.dmg

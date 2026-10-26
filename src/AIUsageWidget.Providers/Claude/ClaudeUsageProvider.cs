@@ -202,12 +202,12 @@ public sealed class ClaudeUsageProvider : IUsageProvider
         }
         catch (ClaudeBlockedException) when (_browserSessionClient is not null)
         {
-            _logger.LogInformation("Claude bloqueo HttpClient; reintentando mediante WebView2 sin registrar credenciales.");
+            _logger.LogInformation("Claude bloqueo HttpClient; reintentando mediante el navegador integrado sin registrar credenciales.");
             return await _browserSessionClient.GetJsonAsync(sessionKey, path, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && _browserSessionClient is not null)
         {
-            _logger.LogInformation("Claude no respondio a HttpClient a tiempo; reintentando mediante WebView2 sin registrar credenciales.");
+            _logger.LogInformation("Claude no respondio a HttpClient a tiempo; reintentando mediante el navegador integrado sin registrar credenciales.");
             return await _browserSessionClient.GetJsonAsync(sessionKey, path, cancellationToken).ConfigureAwait(false);
         }
     }
@@ -216,16 +216,22 @@ public sealed class ClaudeUsageProvider : IUsageProvider
     {
         var fiveHour = TryFindObject(root, "five_hour");
         var sevenDay = TryFindObject(root, "seven_day");
-        var sessionPercentage = TryFindPercentage(fiveHour ?? root, "utilization", true)
+        var sessionPercentage = TryFindDirectPercentage(fiveHour, "utilization", true)
+                                ?? TryFindUsageRatio(fiveHour)
+                                ?? TryFindPercentage(root, "utilization", true)
                                 ?? TryFindNumber(root, "session_usage_percentage")
                                 ?? TryFindNumber(root, "sessionUsagePercentage")
                                 ?? TryFindNumber(root, "percentage");
-        var weeklyPercentage = TryFindPercentage(sevenDay ?? root, "utilization", true)
+        var weeklyPercentage = TryFindDirectPercentage(sevenDay, "utilization", true)
+                               ?? TryFindUsageRatio(sevenDay)
                                ?? TryFindNumber(root, "weekly_usage_percentage")
                                ?? TryFindNumber(root, "weeklyUsagePercentage");
         var reset = TryFindDate(fiveHour ?? root, "resets_at")
                     ?? TryFindDate(root, "next_reset_at")
                     ?? TryFindDate(root, "reset_at");
+        var weeklyReset = TryFindDate(sevenDay ?? root, "resets_at")
+                          ?? TryFindDate(root, "weekly_reset_at")
+                          ?? TryFindDate(root, "weeklyResetAt");
 
         return new UsageSnapshot
         {
@@ -237,6 +243,8 @@ public sealed class ClaudeUsageProvider : IUsageProvider
             WeeklyUsagePercentage = weeklyPercentage,
             NextResetAt = reset,
             TimeUntilReset = ResetCalculator.Calculate(reset, now),
+            WeeklyResetAt = weeklyReset,
+            TimeUntilWeeklyReset = ResetCalculator.Calculate(weeklyReset, now),
             RequestsUsed = TryFindLong(root, "requests_used"),
             RequestsLimit = TryFindLong(root, "requests_limit"),
             TokensUsed = TryFindLong(root, "tokens_used"),
@@ -292,6 +300,65 @@ public sealed class ClaudeUsageProvider : IUsageProvider
         return TryFindPercentage(element, name, false);
     }
 
+    private static double? TryFindDirectPercentage(JsonElement? element, string name, bool fractionCanMeanPercentage)
+    {
+        if (element is not { ValueKind: JsonValueKind.Object } value)
+        {
+            return null;
+        }
+
+        foreach (var property in value.EnumerateObject())
+        {
+            if (!string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase)
+                || !property.Value.TryGetDouble(out var number))
+            {
+                continue;
+            }
+
+            return NormalizePercentage(number, fractionCanMeanPercentage);
+        }
+
+        return null;
+    }
+
+    private static double? TryFindUsageRatio(JsonElement? element)
+    {
+        if (element is not { ValueKind: JsonValueKind.Object } value)
+        {
+            return null;
+        }
+
+        var used = TryFindDirectNumber(value, "used")
+                   ?? TryFindDirectNumber(value, "usage")
+                   ?? TryFindDirectNumber(value, "amount_used");
+        var limit = TryFindDirectNumber(value, "limit")
+                    ?? TryFindDirectNumber(value, "max")
+                    ?? TryFindDirectNumber(value, "quota");
+
+        if (used is not { } usedValue || limit is not { } limitValue || limitValue <= 0)
+        {
+            return null;
+        }
+
+        return NormalizePercentage(usedValue / limitValue, true);
+    }
+
+    private static double? TryFindDirectNumber(JsonElement element, string name)
+    {
+        foreach (var property in element.EnumerateObject())
+        {
+            if (string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase)
+                && property.Value.TryGetDouble(out var value)
+                && !double.IsNaN(value)
+                && !double.IsInfinity(value))
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
     private static double? TryFindPercentage(JsonElement element, string name, bool fractionCanMeanPercentage)
     {
         foreach (var property in Walk(element))
@@ -304,14 +371,24 @@ public sealed class ClaudeUsageProvider : IUsageProvider
                     return null;
                 }
 
-                var percentage = fractionCanMeanPercentage && value is >= 0 and <= 1
-                    ? value * 100
-                    : value;
-                return Math.Clamp(percentage, 0, 100);
+                return NormalizePercentage(value, fractionCanMeanPercentage);
             }
         }
 
         return null;
+    }
+
+    private static double? NormalizePercentage(double value, bool fractionCanMeanPercentage)
+    {
+        if (double.IsNaN(value) || double.IsInfinity(value))
+        {
+            return null;
+        }
+
+        var percentage = fractionCanMeanPercentage && value is >= 0 and <= 1
+            ? value * 100
+            : value;
+        return Math.Clamp(percentage, 0, 100);
     }
 
     private static long? TryFindLong(JsonElement element, string name)

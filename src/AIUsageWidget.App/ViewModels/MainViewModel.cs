@@ -64,6 +64,19 @@ public sealed partial class MainViewModel : ObservableObject
     public string CompactResetLine => Snapshot?.NextResetAt is { } compactReset
         ? $"reset {compactReset.ToLocalTime().ToString(Settings.TimeFormat, CultureInfo.CurrentCulture)} ({FormatRemaining(Snapshot.TimeUntilReset)})"
         : "reset N/D";
+    public string CompactWeeklyLimitLine
+    {
+        get
+        {
+            var usage = Snapshot?.WeeklyUsagePercentage is { } weekly
+                ? $"{SafePercentage(weekly):0.#}%"
+                : "N/D";
+            var reset = Snapshot?.WeeklyResetAt is { } weeklyReset
+                ? FormatWeeklyReset(weeklyReset.ToLocalTime())
+                : "N/D";
+            return $"{usage} {reset}";
+        }
+    }
     public string RequestLine => Snapshot?.RequestsUsed is { } used
         ? $"Solicitudes {used:N0} / {(Snapshot.RequestsLimit?.ToString("N0", CultureInfo.CurrentCulture) ?? "N/D")}"
         : "Solicitudes N/D";
@@ -194,4 +207,21 @@ public sealed partial class MainViewModel : ObservableObject
 
         return $"{Math.Max(0, remaining.Value.Minutes)} min";
     }
+
+    private string FormatWeeklyReset(DateTimeOffset reset)
+    {
+        return $"{FormatSpanishDay(reset.DayOfWeek)}-{reset.ToString(Settings.TimeFormat, CultureInfo.CurrentCulture)}";
+    }
+
+    private static string FormatSpanishDay(DayOfWeek day) => day switch
+    {
+        DayOfWeek.Monday => "Lun",
+        DayOfWeek.Tuesday => "Mar",
+        DayOfWeek.Wednesday => "Mie",
+        DayOfWeek.Thursday => "Jue",
+        DayOfWeek.Friday => "Vie",
+        DayOfWeek.Saturday => "Sab",
+        DayOfWeek.Sunday => "Dom",
+        _ => ""
+    };
 }

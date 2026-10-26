@@ -4,9 +4,9 @@ public sealed class LocalAppPaths
 {
     public LocalAppPaths(string? root = null)
     {
-        Root = root ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "AIUsageWidget");
+        Root = root ?? (OperatingSystem.IsMacOS()
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "Application Support", "AIUsageWidget")
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AIUsageWidget"));
         History = Path.Combine(Root, "history");
         Logs = Path.Combine(Root, "logs");
         SettingsFile = Path.Combine(Root, "settings.json");

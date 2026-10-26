@@ -10,6 +10,8 @@ public sealed class UsageSnapshot
     public double? WeeklyUsagePercentage { get; init; }
     public DateTimeOffset? NextResetAt { get; init; }
     public TimeSpan? TimeUntilReset { get; init; }
+    public DateTimeOffset? WeeklyResetAt { get; init; }
+    public TimeSpan? TimeUntilWeeklyReset { get; init; }
     public long? RequestsUsed { get; init; }
     public long? RequestsLimit { get; init; }
     public long? TokensUsed { get; init; }

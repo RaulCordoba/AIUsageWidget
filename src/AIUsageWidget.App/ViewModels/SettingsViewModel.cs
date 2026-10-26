@@ -17,6 +17,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string _status = "Listo";
     [ObservableProperty] private bool _isProviderHelpVisible;
     [ObservableProperty] private bool _hasClaudeCredentials;
+    [ObservableProperty] private bool _lastSaveSucceeded;
+    public Task Initialization { get; }
 
     public SettingsViewModel(
         ISettingsStore settingsStore,
@@ -28,10 +30,13 @@ public sealed partial class SettingsViewModel : ObservableObject
         _credentialStore = credentialStore;
         _startupService = startupService;
         _providers = providers;
-        _ = LoadAsync();
+        Initialization = LoadAsync();
     }
 
     public IReadOnlyList<string> ProviderIds => _providers.Select(x => x.Id).ToArray();
+    public string CredentialHint => HasClaudeCredentials ? "Sesion guardada (escribe para sustituirla)" : "Cookie sessionKey de Claude";
+
+    partial void OnHasClaudeCredentialsChanged(bool value) => OnPropertyChanged(nameof(CredentialHint));
 
     public string ProviderHelpText => Settings.SelectedProviderId.Equals("claude", StringComparison.OrdinalIgnoreCase)
         ? "Para Claude necesitas el valor de la cookie sessionKey de claude.ai. Inicia sesion en Claude desde el navegador, abre las herramientas de desarrollador, ve a Application > Cookies > https://claude.ai, copia solo el valor de sessionKey y pegalo en la caja inferior. Guardalo despues. No lo compartas ni lo escribas en archivos."
@@ -52,33 +57,48 @@ public sealed partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     private async Task SaveAsync()
     {
-        await _settingsStore.SaveAsync(Settings);
-        if (Settings.StartWithWindows && !_startupService.IsEnabled())
+        await Initialization;
+        LastSaveSucceeded = false;
+        try
         {
-            _startupService.Enable();
-        }
-        else if (!Settings.StartWithWindows && _startupService.IsEnabled())
-        {
-            _startupService.Disable();
-        }
+            Settings = Settings.Validate();
+            await _settingsStore.SaveAsync(Settings);
+            if (Settings.StartWithWindows && !_startupService.IsEnabled())
+            {
+                _startupService.Enable();
+            }
+            else if (!Settings.StartWithWindows && _startupService.IsEnabled())
+            {
+                _startupService.Disable();
+            }
 
-        if (!string.IsNullOrWhiteSpace(ClaudeSessionKey))
-        {
-            await _credentialStore.SaveAsync("claude.sessionKey", NormalizeClaudeSessionKey(ClaudeSessionKey));
-            ClaudeSessionKey = string.Empty;
-            HasClaudeCredentials = true;
-        }
+            if (!string.IsNullOrWhiteSpace(ClaudeSessionKey))
+            {
+                await _credentialStore.SaveAsync("claude.sessionKey", NormalizeClaudeSessionKey(ClaudeSessionKey));
+                ClaudeSessionKey = string.Empty;
+                HasClaudeCredentials = true;
+            }
 
-        Status = "Configuración guardada";
+            Status = "Configuración guardada";
+            LastSaveSucceeded = true;
+        }
+        catch (Exception)
+        {
+            Status = "No se pudo guardar. Revisa los permisos de almacenamiento, inicio automatico y credenciales del sistema.";
+        }
     }
 
     [RelayCommand]
     private async Task DeleteClaudeCredentialsAsync()
     {
-        await _credentialStore.DeleteAsync("claude.sessionKey");
-        ClaudeSessionKey = string.Empty;
-        HasClaudeCredentials = false;
-        Status = "Credenciales de Claude eliminadas";
+        try
+        {
+            await _credentialStore.DeleteAsync("claude.sessionKey");
+            ClaudeSessionKey = string.Empty;
+            HasClaudeCredentials = false;
+            Status = "Credenciales de Claude eliminadas";
+        }
+        catch (Exception) { Status = "No se pudieron eliminar las credenciales. Revisa el acceso al almacen seguro del sistema."; }
     }
 
     [RelayCommand]
@@ -91,15 +111,23 @@ public sealed partial class SettingsViewModel : ObservableObject
             return;
         }
 
-        var result = await provider.CheckAvailabilityAsync();
-        Status = result.Message ?? (result.IsAvailable ? "Disponible" : "No disponible");
+        try
+        {
+            var result = await provider.CheckAvailabilityAsync();
+            Status = result.Message ?? (result.IsAvailable ? "Disponible" : "No disponible");
+        }
+        catch (Exception) { Status = "No se pudo comprobar la conexion. Revisa la sesion y el acceso al almacen seguro del sistema."; }
     }
 
     private async Task LoadAsync()
     {
-        Settings = await _settingsStore.LoadAsync();
-        Settings = Settings with { StartWithWindows = _startupService.IsEnabled() };
-        HasClaudeCredentials = !string.IsNullOrWhiteSpace(await _credentialStore.GetAsync("claude.sessionKey"));
+        try
+        {
+            Settings = await _settingsStore.LoadAsync();
+            Settings = Settings with { StartWithWindows = _startupService.IsEnabled() };
+            HasClaudeCredentials = !string.IsNullOrWhiteSpace(await _credentialStore.GetAsync("claude.sessionKey"));
+        }
+        catch (Exception) { Status = "No se pudo cargar toda la configuracion. Revisa los permisos de almacenamiento y del almacen seguro del sistema."; }
     }
 
     private static string NormalizeClaudeSessionKey(string value)
