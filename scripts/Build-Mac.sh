@@ -13,10 +13,32 @@ case "$rid" in
 esac
 app="$PWD/publish/$rid/AI Usage Widget.app"
 binary="$app/Contents/MacOS"
+resources="$app/Contents/Resources"
+frameworks="$app/Contents/Frameworks"
 helper="$app/Contents/Helpers/AIUsageWidget.MacHelper.app"
-mkdir -p "$binary" "$app/Contents/Resources" "$helper/Contents/MacOS" artifacts/macos
+# Recreate only this runtime's generated bundle, including any old signatures
+# and symlinks, so repeated builds have the same layout as a fresh checkout.
+rm -rf "$app"
+mkdir -p "$binary" "$resources" "$frameworks" "$helper/Contents/MacOS" artifacts/macos
 dotnet publish src/AIUsageWidget.Desktop/AIUsageWidget.Desktop.csproj \
   -c Release -r "$rid" --self-contained true -p:PublishSingleFile=false -o "$binary"
+# Apple treats files in MacOS as nested native code. Managed DLLs, JSON,
+# symbols and localization directories must instead be sealed as resources.
+# Relative symlinks preserve the layout expected by the .NET apphost/runtime.
+while IFS= read -r -d '' entry; do
+  name="$(basename "$entry")"
+  if [[ -f "$entry" ]] && [[ "$(file -b "$entry")" == *Mach-O* ]]; then
+    case "$name" in
+      *.dylib)
+        mv "$entry" "$frameworks/$name"
+        ln -s "../Frameworks/$name" "$entry"
+        ;;
+    esac
+  else
+    mv "$entry" "$resources/$name"
+    ln -s "../Resources/$name" "$entry"
+  fi
+done < <(find "$binary" -mindepth 1 -maxdepth 1 -print0)
 cp installer/macos/Info.plist "$app/Contents/Info.plist"
 cp installer/macos/Helper-Info.plist "$helper/Contents/Info.plist"
 xcrun swiftc -swift-version 5 -O -target "$arch-apple-macos12.0" \
@@ -35,8 +57,11 @@ iconutil -c icns "$iconset" -o "$app/Contents/Resources/AppIcon.icns"
 plutil -lint "$app/Contents/Info.plist" "$helper/Contents/Info.plist"
 # Ad-hoc signing supports local builds; Developer ID enables external distribution.
 identity="${MACOS_SIGN_IDENTITY:--}"
-find "$binary" -type f -print0 |
+find "$binary" "$frameworks" -type f -print0 |
   while IFS= read -r -d '' library; do
+    # Signing the main executable also signs its containing bundle. Defer it
+    # until all libraries and the helper have been signed, with entitlements.
+    [[ "$library" == "$binary/AIUsageWidget.Desktop" ]] && continue
     # Include runtime executables such as createdump, not just shared libraries.
     case "$(file -b "$library")" in *Mach-O*) ;; *) continue ;; esac
     if [[ "$identity" == - ]]; then

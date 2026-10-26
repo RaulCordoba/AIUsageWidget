@@ -22,6 +22,8 @@ You do not need a local Mac to obtain these packages: push the changes to GitHub
 
 `dotnet run` alone does not produce the Swift helper or application bundle: use the packaging script when testing Claude's WebKit fallback and notifications.
 
+The packaging script recreates the generated app bundle for the selected runtime before publishing. Native executables live in `Contents/MacOS`, native libraries in `Contents/Frameworks`, and managed DLLs, JSON and other data in `Contents/Resources`. Relative symlinks from `MacOS` preserve .NET's file lookup paths. Libraries and the helper are signed first; the outer application and its main executable are signed last with the application entitlements. This prevents `codesign` from treating managed DLLs as unsigned nested native code.
+
 ## Platform integrations
 
 | Feature | macOS implementation |
