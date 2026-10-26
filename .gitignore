@@ -24,7 +24,7 @@ settings.json
 providers.json
 window-state.json
 notifications.json
-history/
+/history/
 logs/
 
 # Sensitive material
