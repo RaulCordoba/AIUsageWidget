@@ -16,6 +16,9 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 Push-Location $root
 try {
     dotnet publish src\AIUsageWidget.App\AIUsageWidget.App.csproj -c Release -r win-x64 --self-contained false -o publish\win-x64
+    if ($LASTEXITCODE -ne 0) {
+        throw "dotnet publish fallo con el codigo $LASTEXITCODE. No se generara un instalador con archivos antiguos."
+    }
 
     New-Item -ItemType Directory -Path $artifactDir -Force | Out-Null
     if (Test-Path $stageDir) {
@@ -56,9 +59,9 @@ Start-Process -FilePath $exePath -WorkingDirectory $installDir
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0install.ps1"
 '@ | Set-Content -Path $installCmd -Encoding ASCII
 
-    $installerTargetPath = $installerPath
+    $installerTargetPath = Join-Path $stageDir 'AIUsageWidget-Setup.exe'
     $stageSourcePath = $stageDir + '\'
-    @"
+    $sedContents = @"
 [Version]
 Class=IEXPRESS
 SEDVersion=3
@@ -91,14 +94,25 @@ SourceFiles0=$stageSourcePath
 %FILE0%=
 %FILE1%=
 %FILE2%=
-"@ | Set-Content -Path $sedPath -Encoding ASCII
+"@
+    # Write a Windows-format SED regardless of the checkout's line endings.
+    ($sedContents -replace '\r?\n', "`r`n") | Set-Content -Path $sedPath -Encoding ASCII
 
     $iexpress = (Get-Command iexpress.exe -ErrorAction Stop).Source
-    & $iexpress /N /Q $sedPath
-
-    if (-not (Test-Path $installerPath)) {
-        throw "No se genero el instalador en $installerPath"
+    $packageStartedAt = Get-Date
+    # Use the local filename: IExpress rejects a quoted SED argument.
+    $packageProcess = Start-Process -FilePath $iexpress -ArgumentList @('/N', '/Q', (Split-Path -Leaf $sedPath)) -WorkingDirectory $stageDir -Wait -PassThru -WindowStyle Hidden
+    if ($packageProcess.ExitCode -ne 0) {
+        throw "IExpress fallo con el codigo $($packageProcess.ExitCode)."
     }
+
+    if (-not (Test-Path $installerTargetPath)) {
+        throw "No se genero el instalador en $installerTargetPath"
+    }
+    if ((Get-Item -LiteralPath $installerTargetPath).LastWriteTime -lt $packageStartedAt) {
+        throw "IExpress no actualizo el instalador en $installerTargetPath"
+    }
+    Move-Item -LiteralPath $installerTargetPath -Destination $installerPath -Force
 
     Write-Host "Instalador generado: $installerPath"
 }

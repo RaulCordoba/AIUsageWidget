@@ -1,6 +1,6 @@
 # AI Usage Widget
 
-AI Usage Widget monitors AI provider usage in a compact, floating desktop interface. The Windows application uses WPF; the macOS application uses Avalonia with the same layout, compact/expanded views and shared monitoring logic. Both use C#, .NET 8 and local JSON storage. Credentials are protected by Windows Credential Manager or the macOS login Keychain.
+AI Usage Widget monitors AI provider usage in a compact, floating desktop interface. The Windows application uses WPF; the macOS application uses Avalonia with the same layout, compact/expanded views and shared monitoring logic. Both use C#, .NET 10 and local JSON storage. Credentials are protected by Windows Credential Manager or the macOS login Keychain.
 
 The macOS port includes native WebKit, menu-bar integration, notifications, login startup, and Apple Silicon/Intel packaging. See [macOS build and validation](docs/macos.md) for instructions and the validation still required on a Mac.
 
@@ -13,7 +13,7 @@ The macOS port includes native WebKit, menu-bar integration, notifications, logi
 ## Repository Description
 
 ```text
-Windows and macOS widget for monitoring AI usage limits, with Claude and Demo providers. Built with .NET 8, WPF/Avalonia, local JSON storage and system credential stores.
+Windows and macOS widget for monitoring AI usage limits, with Claude and Demo providers. Built with .NET 10, WPF/Avalonia, local JSON storage and system credential stores.
 ```
 
 ## Features
@@ -33,14 +33,15 @@ Windows and macOS widget for monitoring AI usage limits, with Claude and Demo pr
 ### Windows
 
 - Windows 10/11.
-- Visual Studio 2022 with the .NET Desktop Development workload.
-- .NET 8 SDK.
+- Visual Studio 2026 (18.0 or later) with the .NET Desktop Development workload, or the .NET CLI.
+- .NET 10 SDK.
+- .NET Desktop Runtime 10 (x64) to run the Windows publication or installer, which do not bundle the runtime.
 - WebView2 Runtime for the Claude browser fallback.
 
 ### macOS
 
-- macOS 12 or later is the packaging target; actual OS/device support must be validated on the intended Macs.
-- .NET 8 SDK and Xcode Command Line Tools to build. Published apps include the .NET runtime.
+- macOS 15 or later is the packaging target; actual OS/device support must be validated on the intended Macs.
+- .NET 10 SDK and Xcode Command Line Tools to build. Published apps include the .NET runtime.
 - Apple Silicon (`osx-arm64`) or Intel (`osx-x64`).
 
 ```bash

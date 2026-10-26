@@ -10,5 +10,5 @@
   <key>CFBundleShortVersionString</key><string>1.0.0</string>
   <key>CFBundleIconFile</key><string>AppIcon.icns</string>
   <key>NSHighResolutionCapable</key><true/>
-  <key>LSMinimumSystemVersion</key><string>12.0</string>
+  <key>LSMinimumSystemVersion</key><string>15.0</string>
 </dict></plist>

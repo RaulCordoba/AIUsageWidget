@@ -21,7 +21,8 @@ helper="$app/Contents/Helpers/AIUsageWidget.MacHelper.app"
 rm -rf "$app"
 mkdir -p "$binary" "$resources" "$frameworks" "$helper/Contents/MacOS" artifacts/macos
 dotnet publish src/AIUsageWidget.Desktop/AIUsageWidget.Desktop.csproj \
-  -c Release -r "$rid" --self-contained true -p:PublishSingleFile=false -o "$binary"
+  -c Release -r "$rid" --self-contained true -p:PublishSingleFile=false \
+  -p:AppHostDotNetSearch=AppLocal -o "$binary"
 # Apple treats files in MacOS as nested native code. Managed DLLs, JSON,
 # symbols and localization directories must instead be sealed as resources.
 # Relative symlinks preserve the layout expected by the .NET apphost/runtime.
@@ -32,6 +33,9 @@ while IFS= read -r -d '' entry; do
       *.dylib)
         mv "$entry" "$frameworks/$name"
         ln -s "../Frameworks/$name" "$entry"
+        # The apphost resolves the managed entry DLL's symlink to Resources
+        # and uses that directory to locate the self-contained runtime too.
+        ln -s "../Frameworks/$name" "$resources/$name"
         ;;
     esac
   else
@@ -39,9 +43,19 @@ while IFS= read -r -d '' entry; do
     ln -s "../Resources/$name" "$entry"
   fi
 done < <(find "$binary" -mindepth 1 -maxdepth 1 -print0)
+# Fail before signing/packaging if either .NET lookup directory has a missing
+# runtime library or a broken symlink. Never rely on the build Mac's SDK.
+for library in libhostfxr.dylib libhostpolicy.dylib libcoreclr.dylib; do
+  for lookup in "$binary" "$resources"; do
+    if [[ ! -f "$lookup/$library" ]]; then
+      echo "Missing bundled runtime library: $lookup/$library" >&2
+      exit 1
+    fi
+  done
+done
 cp installer/macos/Info.plist "$app/Contents/Info.plist"
 cp installer/macos/Helper-Info.plist "$helper/Contents/Info.plist"
-xcrun swiftc -swift-version 5 -O -target "$arch-apple-macos12.0" \
+xcrun swiftc -swift-version 5 -O -target "$arch-apple-macos15.0" \
   src/AIUsageWidget.Desktop/Native/MacHelper.swift \
   -o "$helper/Contents/MacOS/AIUsageWidget.MacHelper"
 chmod +x "$binary/AIUsageWidget.Desktop" "$helper/Contents/MacOS/AIUsageWidget.MacHelper"

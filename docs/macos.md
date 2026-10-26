@@ -4,7 +4,7 @@ The macOS application is `src/AIUsageWidget.Desktop`. It keeps the current compa
 
 ## Build and run
 
-Use a Mac with the .NET 8 SDK and Xcode Command Line Tools (`xcode-select --install`). No .NET macOS or MAUI workload is required. The packaging target is macOS 12+. Test on the actual operating systems to be supported before declaring full compatibility.
+Use a Mac with the .NET 10 SDK and Xcode Command Line Tools (`xcode-select --install`). No .NET macOS or MAUI workload is required. The packaging target is macOS 15+. Test on the actual operating systems to be supported before declaring full compatibility.
 
 From the repository root:
 
@@ -22,7 +22,7 @@ You do not need a local Mac to obtain these packages: push the changes to GitHub
 
 `dotnet run` alone does not produce the Swift helper or application bundle: use the packaging script when testing Claude's WebKit fallback and notifications.
 
-The packaging script recreates the generated app bundle for the selected runtime before publishing. Native executables live in `Contents/MacOS`, native libraries in `Contents/Frameworks`, and managed DLLs, JSON and other data in `Contents/Resources`. Relative symlinks from `MacOS` preserve .NET's file lookup paths. Libraries and the helper are signed first; the outer application and its main executable are signed last with the application entitlements. This prevents `codesign` from treating managed DLLs as unsigned nested native code.
+The packaging script recreates the generated app bundle for the selected runtime before publishing. Native executables live in `Contents/MacOS`, native libraries in `Contents/Frameworks`, and managed DLLs, JSON and other data in `Contents/Resources`. Relative symlinks from `MacOS` preserve .NET's file lookup paths. Native libraries also have relative symlinks in `Resources`: .NET resolves the entry DLL's symlink to that directory and searches there for its self-contained runtime. The published apphost searches only the bundled runtime (`AppHostDotNetSearch=AppLocal`), and the script checks the hosting libraries from both lookup directories before signing. Libraries and the helper are signed first; the outer application and its main executable are signed last with the application entitlements. This prevents `codesign` from treating managed DLLs as unsigned nested native code.
 
 ## Platform integrations
 
