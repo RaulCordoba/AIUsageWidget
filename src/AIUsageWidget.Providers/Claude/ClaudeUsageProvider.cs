@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Globalization;
 using System.Text.Json;
 using AIUsageWidget.Core.Interfaces;
 using AIUsageWidget.Core.Models;
@@ -16,19 +17,22 @@ public sealed class ClaudeUsageProvider : IUsageProvider
     private readonly ClaudeUsageProviderOptions _options;
     private readonly ILogger<ClaudeUsageProvider> _logger;
     private readonly IClaudeBrowserSessionClient? _browserSessionClient;
+    private readonly TimeProvider _timeProvider;
 
     public ClaudeUsageProvider(
         IHttpClientFactory httpClientFactory,
         ISecureCredentialStore credentialStore,
         IOptions<ClaudeUsageProviderOptions> options,
         ILogger<ClaudeUsageProvider> logger,
-        IEnumerable<IClaudeBrowserSessionClient> browserSessionClients)
+        IEnumerable<IClaudeBrowserSessionClient> browserSessionClients,
+        TimeProvider? timeProvider = null)
     {
         _httpClientFactory = httpClientFactory;
         _credentialStore = credentialStore;
         _options = options.Value;
         _logger = logger;
         _browserSessionClient = browserSessionClients.FirstOrDefault();
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public string Id => "claude";
@@ -72,7 +76,7 @@ public sealed class ClaudeUsageProvider : IUsageProvider
 
     public async Task<UsageSnapshot> GetUsageAsync(CancellationToken cancellationToken = default)
     {
-        var now = DateTimeOffset.Now;
+        var now = _timeProvider.GetUtcNow();
         var sessionKey = await _credentialStore.GetAsync(_options.CredentialKey, cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(sessionKey))
         {
@@ -90,7 +94,7 @@ public sealed class ClaudeUsageProvider : IUsageProvider
             }
 
             var usage = await FetchJsonAsync(sessionKey, $"/api/organizations/{organization.Id}/usage", timeoutCts.Token).ConfigureAwait(false);
-            return MapUsage(usage, now, organization);
+            return MapUsage(usage, _timeProvider.GetUtcNow(), organization);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -119,6 +123,10 @@ public sealed class ClaudeUsageProvider : IUsageProvider
         client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
         client.DefaultRequestHeaders.Accept.Clear();
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        client.DefaultRequestHeaders.CacheControl = new CacheControlHeaderValue
+        {
+            NoCache = true, NoStore = true, MaxAge = TimeSpan.Zero
+        };
         client.DefaultRequestHeaders.Referrer = new Uri("https://claude.ai/");
         client.DefaultRequestHeaders.Remove("Origin");
         client.DefaultRequestHeaders.Add("Origin", "https://claude.ai");
@@ -198,7 +206,8 @@ public sealed class ClaudeUsageProvider : IUsageProvider
         {
             using var directTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             directTimeoutCts.CancelAfter(_options.DirectHttpTimeout);
-            return await GetJsonAsync(CreateClient(sessionKey), path, directTimeoutCts.Token).ConfigureAwait(false);
+            using var client = CreateClient(sessionKey);
+            return await GetJsonAsync(client, path, directTimeoutCts.Token).ConfigureAwait(false);
         }
         catch (ClaudeBlockedException) when (_browserSessionClient is not null)
         {
@@ -216,20 +225,22 @@ public sealed class ClaudeUsageProvider : IUsageProvider
     {
         var fiveHour = TryFindObject(root, "five_hour");
         var sevenDay = TryFindObject(root, "seven_day");
-        var sessionPercentage = TryFindDirectPercentage(fiveHour, "utilization", true)
+        // Claude's utilization is already expressed in percentage points.
+        // In particular, 1 means 1%, not a fraction representing 100%.
+        var sessionPercentage = TryFindDirectPercentage(fiveHour, "utilization")
                                 ?? TryFindUsageRatio(fiveHour)
-                                ?? TryFindPercentage(root, "utilization", true)
-                                ?? TryFindNumber(root, "session_usage_percentage")
-                                ?? TryFindNumber(root, "sessionUsagePercentage")
-                                ?? TryFindNumber(root, "percentage");
-        var weeklyPercentage = TryFindDirectPercentage(sevenDay, "utilization", true)
+                                ?? TryFindDirectPercentage(root, "session_usage_percentage")
+                                ?? TryFindDirectPercentage(root, "sessionUsagePercentage");
+        var weeklyPercentage = TryFindDirectPercentage(sevenDay, "utilization")
                                ?? TryFindUsageRatio(sevenDay)
-                               ?? TryFindNumber(root, "weekly_usage_percentage")
-                               ?? TryFindNumber(root, "weeklyUsagePercentage");
-        var reset = TryFindDate(fiveHour ?? root, "resets_at")
+                               ?? TryFindDirectPercentage(root, "weekly_usage_percentage")
+                               ?? TryFindDirectPercentage(root, "weeklyUsagePercentage");
+        // Never search recursively: model-specific limits and other windows
+        // must not supply the session or all-model weekly values/reset dates.
+        var reset = TryFindDate(fiveHour, "resets_at")
                     ?? TryFindDate(root, "next_reset_at")
                     ?? TryFindDate(root, "reset_at");
-        var weeklyReset = TryFindDate(sevenDay ?? root, "resets_at")
+        var weeklyReset = TryFindDate(sevenDay, "resets_at")
                           ?? TryFindDate(root, "weekly_reset_at")
                           ?? TryFindDate(root, "weeklyResetAt");
 
@@ -269,7 +280,8 @@ public sealed class ClaudeUsageProvider : IUsageProvider
 
     private static JsonElement? TryFindObject(JsonElement element, string name)
     {
-        foreach (var property in Walk(element))
+        if (element.ValueKind != JsonValueKind.Object) return null;
+        foreach (var property in element.EnumerateObject())
         {
             if (string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase)
                 && property.Value.ValueKind == JsonValueKind.Object)
@@ -295,30 +307,15 @@ public sealed class ClaudeUsageProvider : IUsageProvider
         return null;
     }
 
-    private static double? TryFindNumber(JsonElement element, string name)
-    {
-        return TryFindPercentage(element, name, false);
-    }
-
-    private static double? TryFindDirectPercentage(JsonElement? element, string name, bool fractionCanMeanPercentage)
+    private static double? TryFindDirectPercentage(JsonElement? element, string name)
     {
         if (element is not { ValueKind: JsonValueKind.Object } value)
         {
             return null;
         }
 
-        foreach (var property in value.EnumerateObject())
-        {
-            if (!string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase)
-                || !property.Value.TryGetDouble(out var number))
-            {
-                continue;
-            }
-
-            return NormalizePercentage(number, fractionCanMeanPercentage);
-        }
-
-        return null;
+        var number = TryFindDirectNumber(value, name);
+        return number is { } percentage ? NormalizePercentage(percentage) : null;
     }
 
     private static double? TryFindUsageRatio(JsonElement? element)
@@ -340,7 +337,7 @@ public sealed class ClaudeUsageProvider : IUsageProvider
             return null;
         }
 
-        return NormalizePercentage(usedValue / limitValue, true);
+        return NormalizePercentage(usedValue / limitValue * 100);
     }
 
     private static double? TryFindDirectNumber(JsonElement element, string name)
@@ -348,6 +345,7 @@ public sealed class ClaudeUsageProvider : IUsageProvider
         foreach (var property in element.EnumerateObject())
         {
             if (string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase)
+                && property.Value.ValueKind == JsonValueKind.Number
                 && property.Value.TryGetDouble(out var value)
                 && !double.IsNaN(value)
                 && !double.IsInfinity(value))
@@ -359,36 +357,14 @@ public sealed class ClaudeUsageProvider : IUsageProvider
         return null;
     }
 
-    private static double? TryFindPercentage(JsonElement element, string name, bool fractionCanMeanPercentage)
+    private static double? NormalizePercentage(double value)
     {
-        foreach (var property in Walk(element))
-        {
-            if (string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase)
-                && property.Value.TryGetDouble(out var value))
-            {
-                if (double.IsNaN(value) || double.IsInfinity(value))
-                {
-                    return null;
-                }
-
-                return NormalizePercentage(value, fractionCanMeanPercentage);
-            }
-        }
-
-        return null;
-    }
-
-    private static double? NormalizePercentage(double value, bool fractionCanMeanPercentage)
-    {
-        if (double.IsNaN(value) || double.IsInfinity(value))
+        if (!double.IsFinite(value) || value < 0)
         {
             return null;
         }
 
-        var percentage = fractionCanMeanPercentage && value is >= 0 and <= 1
-            ? value * 100
-            : value;
-        return Math.Clamp(percentage, 0, 100);
+        return Math.Clamp(value, 0, 100);
     }
 
     private static long? TryFindLong(JsonElement element, string name)
@@ -419,10 +395,20 @@ public sealed class ClaudeUsageProvider : IUsageProvider
         return null;
     }
 
-    private static DateTimeOffset? TryFindDate(JsonElement element, string name)
+    private static DateTimeOffset? TryFindDate(JsonElement? element, string name)
     {
-        var value = TryFindString(element, name);
-        return DateTimeOffset.TryParse(value, out var parsed) ? parsed : null;
+        if (element is not { ValueKind: JsonValueKind.Object } scope) return null;
+        foreach (var property in scope.EnumerateObject())
+        {
+            if (string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase)
+                && property.Value.ValueKind == JsonValueKind.String
+                && DateTimeOffset.TryParse(property.Value.GetString(), CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeUniversal, out var parsed))
+            {
+                return parsed;
+            }
+        }
+        return null;
     }
 
     private static bool LooksLikeHtml(string content)

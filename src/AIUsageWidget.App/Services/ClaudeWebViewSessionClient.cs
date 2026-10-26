@@ -106,7 +106,9 @@ public sealed class ClaudeWebViewSessionClient : IClaudeBrowserSessionClient
         webView.NavigationCompleted += OnNavigationCompleted;
         try
         {
-            webView.CoreWebView2.Navigate(uri.ToString());
+            var request = webView.CoreWebView2.Environment.CreateWebResourceRequest(
+                uri.ToString(), "GET", null, "Cache-Control: no-cache, no-store\r\nPragma: no-cache\r\n");
+            webView.CoreWebView2.NavigateWithWebResourceRequest(request);
             return await tcs.Task.ConfigureAwait(true);
         }
         finally

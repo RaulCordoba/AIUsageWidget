@@ -59,7 +59,12 @@ final class Helper: NSObject, WKNavigationDelegate, UNUserNotificationCenterDele
                 .domain: ".claude.ai", .path: "/", .secure: "TRUE", HTTPCookiePropertyKey(rawValue: "HttpOnly"): "TRUE"]) else {
                 finish(); return
             }
-            configuration.websiteDataStore.httpCookieStore.setCookie(cookie) { view.load(URLRequest(url: url)) }
+            configuration.websiteDataStore.httpCookieStore.setCookie(cookie) {
+                var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
+                request.setValue("no-cache, no-store", forHTTPHeaderField: "Cache-Control")
+                request.setValue("no-cache", forHTTPHeaderField: "Pragma")
+                view.load(request)
+            }
         case "notify", "notification-permission":
             let center = UNUserNotificationCenter.current()
             center.delegate = self

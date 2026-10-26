@@ -15,7 +15,7 @@ using MediaBrushes = Avalonia.Media.Brushes;
 
 namespace AIUsageWidget.App.ViewModels;
 
-public sealed partial class MainViewModel : ObservableObject
+public sealed partial class MainViewModel : ObservableObject, IDisposable
 {
     private static readonly UsageColorThresholds CompactColorThresholds = new()
     {
@@ -30,6 +30,7 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly IHistoryStore _historyStore;
     private readonly IServiceProvider _serviceProvider;
     private readonly UsageColorService _colorService = new();
+    private readonly DispatcherTimer _clockTimer;
 
     [ObservableProperty] private AppSettings _settings = new();
     [ObservableProperty] private UsageSnapshot? _snapshot;
@@ -48,6 +49,9 @@ public sealed partial class MainViewModel : ObservableObject
         _historyStore = historyStore;
         _serviceProvider = serviceProvider;
         _monitorService.SnapshotUpdated += OnSnapshotUpdated;
+        _clockTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _clockTimer.Tick += OnClockTick;
+        _clockTimer.Start();
     }
 
     public double DesignWidth => Settings.CompactMode ? 260 : 620;
@@ -63,10 +67,10 @@ public sealed partial class MainViewModel : ObservableObject
     public double WeeklyUsage => SafePercentage(Snapshot?.WeeklyUsagePercentage);
     public string StatusMessage => Snapshot?.StatusMessage ?? "Esperando datos";
     public string ResetLine => Snapshot?.NextResetAt is { } reset
-        ? $"Reset {reset.ToLocalTime().ToString(Settings.TimeFormat, CultureInfo.CurrentCulture)} · {FormatRemaining(Snapshot.TimeUntilReset)}"
+        ? $"Reset {reset.ToLocalTime().ToString(Settings.TimeFormat, CultureInfo.CurrentCulture)} · {ResetCalculator.FormatRemaining(Snapshot.NextResetAt, DateTimeOffset.UtcNow)}"
         : "Reset no disponible";
     public string CompactResetLine => Snapshot?.NextResetAt is { } compactReset
-        ? $"reset {compactReset.ToLocalTime().ToString(Settings.TimeFormat, CultureInfo.CurrentCulture)} ({FormatRemaining(Snapshot.TimeUntilReset)})"
+        ? $"reset {compactReset.ToLocalTime().ToString(Settings.TimeFormat, CultureInfo.CurrentCulture)} ({ResetCalculator.FormatRemaining(Snapshot.NextResetAt, DateTimeOffset.UtcNow)})"
         : "reset N/D";
     public string CompactWeeklyLimitLine
     {
@@ -192,26 +196,23 @@ public sealed partial class MainViewModel : ObservableObject
         return Math.Clamp(number, 0, 100);
     }
 
-    private static string FormatRemaining(TimeSpan? remaining)
+    public string UsageDetails => Snapshot is { } snapshot
+        ? $"{snapshot.ProviderName} - {snapshot.ModelName}\nUltima consulta local: {snapshot.RetrievedAt.ToLocalTime():dd/MM HH:mm:ss}\n{ResetLine}\nSemanal: {CompactWeeklyLimitLine} (hora local)\n{snapshot.StatusMessage}"
+        : "Esperando datos";
+
+    private void OnClockTick(object? sender, EventArgs e)
     {
-        if (remaining is null)
-        {
-            return "N/D";
-        }
-
-        if (remaining.Value.TotalDays >= 1)
-        {
-            return $"{(int)remaining.Value.TotalDays} d {remaining.Value.Hours} h";
-        }
-
-        if (remaining.Value.TotalHours >= 1)
-        {
-            return $"{(int)remaining.Value.TotalHours} h {remaining.Value.Minutes} min";
-        }
-
-        return $"{Math.Max(0, remaining.Value.Minutes)} min";
+        OnPropertyChanged(nameof(ResetLine));
+        OnPropertyChanged(nameof(CompactResetLine));
+        OnPropertyChanged(nameof(UsageDetails));
     }
 
+    public void Dispose()
+    {
+        _clockTimer.Stop();
+        _clockTimer.Tick -= OnClockTick;
+        _monitorService.SnapshotUpdated -= OnSnapshotUpdated;
+    }
     private string FormatWeeklyReset(DateTimeOffset reset)
     {
         return $"{FormatSpanishDay(reset.DayOfWeek)}-{reset.ToString(Settings.TimeFormat, CultureInfo.CurrentCulture)}";

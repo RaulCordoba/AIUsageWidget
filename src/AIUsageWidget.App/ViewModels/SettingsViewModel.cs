@@ -18,6 +18,13 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _isProviderHelpVisible;
     [ObservableProperty] private bool _hasClaudeCredentials;
     [ObservableProperty] private bool _lastSaveSucceeded;
+    [ObservableProperty] private string _connectionStatus = "Conexion sin comprobar";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ConnectionButtonText))]
+    private bool _isCheckingConnection;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ConnectionButtonText))]
+    private bool? _connectionSucceeded;
     public Task Initialization { get; }
 
     public SettingsViewModel(
@@ -35,6 +42,9 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public IReadOnlyList<string> ProviderIds => _providers.Select(x => x.Id).ToArray();
     public string CredentialHint => HasClaudeCredentials ? "Sesion guardada (escribe para sustituirla)" : "Cookie sessionKey de Claude";
+    public string ConnectionButtonText => IsCheckingConnection ? "Comprobando..."
+        : ConnectionSucceeded == true ? "✓ Conexion OK"
+        : ConnectionSucceeded == false ? "✕ Reintentar conexion" : "Comprobar conexion";
 
     partial void OnHasClaudeCredentialsChanged(bool value) => OnPropertyChanged(nameof(CredentialHint));
 
@@ -104,19 +114,35 @@ public sealed partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     private async Task TestProviderAsync()
     {
-        var provider = _providers.FirstOrDefault(x => x.Id == Settings.SelectedProviderId);
-        if (provider is null)
-        {
-            Status = "Proveedor no encontrado";
-            return;
-        }
-
+        IsCheckingConnection = true;
+        ConnectionSucceeded = null;
+        ConnectionStatus = Status = "Comprobando conexion...";
         try
         {
+            await Initialization;
+            var provider = _providers.FirstOrDefault(x => x.Id == Settings.SelectedProviderId);
+            if (provider is null)
+            {
+                ConnectionSucceeded = false;
+                ConnectionStatus = Status = "✕ Proveedor no encontrado";
+                return;
+            }
+            if (provider.Id == "claude" && !string.IsNullOrWhiteSpace(ClaudeSessionKey))
+            {
+                ConnectionStatus = Status = "Guarda la nueva sesion antes de comprobar la conexion.";
+                return;
+            }
             var result = await provider.CheckAvailabilityAsync();
-            Status = result.Message ?? (result.IsAvailable ? "Disponible" : "No disponible");
+            ConnectionSucceeded = result.IsAvailable;
+            var message = result.Message ?? (result.IsAvailable ? "Conexion correcta" : "No disponible");
+            ConnectionStatus = Status = $"{(result.IsAvailable ? "✓" : "✕")} {message}";
         }
-        catch (Exception) { Status = "No se pudo comprobar la conexion. Revisa la sesion y el acceso al almacen seguro del sistema."; }
+        catch (Exception)
+        {
+            ConnectionSucceeded = false;
+            ConnectionStatus = Status = "✕ No se pudo comprobar la conexion. Revisa la sesion y el acceso al almacen seguro del sistema.";
+        }
+        finally { IsCheckingConnection = false; }
     }
 
     private async Task LoadAsync()

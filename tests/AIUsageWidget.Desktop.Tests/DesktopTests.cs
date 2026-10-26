@@ -25,6 +25,85 @@ public static class TestApplication
 public sealed class DesktopTests
 {
     [AvaloniaTheory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ConnectionCheckDisplaysProgressAndItsResultInTheVisibleFooter(bool available)
+    {
+        var provider = new PendingProvider();
+        using var fixture = new Fixture(provider: provider);
+        var vm = fixture.Services.GetRequiredService<SettingsViewModel>();
+        await vm.Initialization;
+        vm.Settings.SelectedProviderId = provider.Id;
+        var window = new SettingsWindow(vm);
+        window.Show();
+        var check = vm.TestProviderCommand.ExecuteAsync(null);
+        Assert.True(vm.IsCheckingConnection);
+        Assert.Contains("Comprobando", vm.Status);
+        Assert.Equal("Comprobando...", window.FindControl<Button>("TestConnectionButton")!.Content);
+        provider.Result.SetResult(available ? ProviderAvailabilityResult.Available("Conexion comprobada")
+            : ProviderAvailabilityResult.Unavailable("La sesion ha caducado", true));
+        await check;
+        window.UpdateLayout();
+        Assert.Equal(available, vm.ConnectionSucceeded);
+        Assert.False(vm.IsCheckingConnection);
+        var status = window.FindControl<TextBlock>("SettingsStatus")!;
+        Assert.Equal(vm.Status, status.Text);
+        Assert.Contains(available ? "✓" : "✕", status.Text);
+        Assert.InRange(status.TranslatePoint(default, window)!.Value.Y, 0, window.Height - status.Bounds.Height);
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        using var frame = window.CaptureRenderedFrame();
+        var output = Path.Combine(RepositoryRoot(), "artifacts", "ui");
+        Directory.CreateDirectory(output);
+        frame!.Save(Path.Combine(output, available ? "connection-ok.png" : "connection-error.png"));
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public async Task ConnectionExceptionsAreVisibleWithoutExposingTheirContents()
+    {
+        var provider = new PendingProvider();
+        using var fixture = new Fixture(provider: provider);
+        var vm = fixture.Services.GetRequiredService<SettingsViewModel>();
+        await vm.Initialization;
+        vm.Settings.SelectedProviderId = provider.Id;
+        var check = vm.TestProviderCommand.ExecuteAsync(null);
+        provider.Result.SetException(new InvalidOperationException("SECRET credential details"));
+        await check;
+        Assert.False(vm.ConnectionSucceeded);
+        Assert.Contains("No se pudo comprobar", vm.Status);
+        Assert.DoesNotContain("SECRET", vm.Status);
+    }
+
+    [AvaloniaFact]
+    public async Task UnknownUsageIsNotDisplayedAsZeroAndCountdownUsesCurrentTime()
+    {
+        using var fixture = new Fixture();
+        await fixture.Services.GetRequiredService<ISettingsStore>().SaveAsync(
+            new AppSettings { CompactMode = false, MinimizeToTray = false });
+        var vm = fixture.Services.GetRequiredService<MainViewModel>();
+        vm.Settings = new AppSettings { CompactMode = false, MinimizeToTray = false };
+        vm.Snapshot = new UsageSnapshot
+        {
+            ProviderId = "claude", ProviderName = "Claude", IsConnected = true,
+            WeeklyUsagePercentage = 26,
+            NextResetAt = DateTimeOffset.UtcNow.AddMinutes(90).AddSeconds(30),
+            TimeUntilReset = TimeSpan.FromHours(5),
+            RetrievedAt = DateTimeOffset.UtcNow.AddMinutes(-10)
+        };
+        // Bind the production view without starting its asynchronous placement
+        // persistence, which is unrelated to this display regression.
+        var window = new MainWindow { DataContext = vm };
+        window.Show();
+        window.UpdateLayout();
+        Assert.Equal("N/D", window.FindControl<TextBlock>("SessionUsageText")!.Text);
+        Assert.Equal("26 %", window.FindControl<TextBlock>("WeeklyUsageText")!.Text);
+        Assert.Contains("1 h 31 min", vm.CompactResetLine);
+        Assert.DoesNotContain("5 h", vm.CompactResetLine);
+        Assert.Contains("Ultima consulta local:", vm.UsageDetails);
+        window.Close();
+    }
+
+    [AvaloniaTheory]
     [InlineData(true, 1.0, 260, 52)]
     [InlineData(false, 1.0, 620, 330)]
     [InlineData(true, 2.0, 520, 104)]
@@ -115,7 +194,7 @@ public sealed class DesktopTests
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "AIUsageWidget-UI-" + Guid.NewGuid().ToString("N"));
         public ServiceProvider Services { get; }
-        public Fixture(ISecureCredentialStore? credentials = null)
+        public Fixture(ISecureCredentialStore? credentials = null, IUsageProvider? provider = null)
         {
             var services = new ServiceCollection();
             services.AddLogging();
@@ -124,6 +203,7 @@ public sealed class DesktopTests
             services.AddSingleton<ISecureCredentialStore>(credentials ?? new MemoryCredentials());
             services.AddSingleton<IStartupService, MemoryStartup>();
             services.AddUsageProviders();
+            if (provider is not null) services.AddSingleton<IUsageProvider>(provider);
             services.AddSingleton<UsageMonitorService>();
             services.AddSingleton<WindowPlacementService>();
             services.AddSingleton<MainViewModel>();
@@ -143,6 +223,14 @@ public sealed class DesktopTests
         public Task SaveAsync(string key, string value, CancellationToken cancellationToken = default) { _values[key] = value; return Task.CompletedTask; }
         public Task<string?> GetAsync(string key, CancellationToken cancellationToken = default) => Task.FromResult(_values.GetValueOrDefault(key));
         public Task DeleteAsync(string key, CancellationToken cancellationToken = default) { _values.Remove(key); return Task.CompletedTask; }
+    }
+    private sealed class PendingProvider : IUsageProvider
+    {
+        public string Id => "test-connection";
+        public string DisplayName => "Test connection";
+        public TaskCompletionSource<ProviderAvailabilityResult> Result { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public Task<ProviderAvailabilityResult> CheckAvailabilityAsync(CancellationToken cancellationToken = default) => Result.Task;
+        public Task<UsageSnapshot> GetUsageAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
     private sealed class DeniedCredentials : ISecureCredentialStore
     {

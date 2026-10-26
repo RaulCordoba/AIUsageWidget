@@ -5,6 +5,23 @@ namespace AIUsageWidget.Core.Tests;
 
 public sealed class CoreServicesTests
 {
+    [Theory]
+    [InlineData(0, "0 min")]
+    [InlineData(-1, "0 min")]
+    [InlineData(1, "1 min")]
+    [InlineData(59, "1 min")]
+    [InlineData(60, "1 min")]
+    [InlineData(61, "2 min")]
+    [InlineData(3599, "1 h 0 min")]
+    [InlineData(3601, "1 h 1 min")]
+    [InlineData(90000, "1 d 1 h")]
+    public void RemainingTimeUsesTheResetInstantAndRoundsUpMinutes(int remainingSeconds, string expected)
+    {
+        var now = DateTimeOffset.Parse("2026-10-26T12:00:00Z");
+        Assert.Equal(expected, ResetCalculator.FormatRemaining(now.AddSeconds(remainingSeconds), now));
+        Assert.Equal("N/D", ResetCalculator.FormatRemaining(null, now));
+    }
+
     [Fact]
     public void ResetCalculator_ReturnsZero_WhenResetIsPast()
     {

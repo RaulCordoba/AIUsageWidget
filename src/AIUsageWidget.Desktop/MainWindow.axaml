@@ -54,7 +54,7 @@
                     </Border>
                 </Grid>
 
-                <Border Grid.Column="1"
+                <Border Grid.Column="1" ToolTip.Tip="{Binding UsageDetails}"
                         Background="#9A25262A"
                         BorderBrush="#2EFFFFFF"
                         BorderThickness="1"
@@ -92,7 +92,7 @@
                                     </Border.Width>
                                 </Border>
                             </Border>
-                            <TextBlock Text="{Binding PrimaryUsage, Converter={StaticResource PercentageTextConverter}}"
+                            <TextBlock x:Name="PrimaryUsageText" Text="{Binding Snapshot.PrimaryUsagePercentage, Converter={StaticResource PercentageTextConverter}}"
                                        Grid.Column="0"
                                        Foreground="White"
                                        FontSize="11"
@@ -162,12 +162,12 @@
                     <StackPanel Grid.Column="0" Margin="0,0,8,0">
                         <TextBlock Text="Uso de sesion" Foreground="{StaticResource MutedTextBrush}" />
                         <ProgressBar Minimum="0" Maximum="100" Value="{Binding SessionUsage, Mode=OneWay, FallbackValue=0, TargetNullValue=0}" Foreground="{Binding UsageBrush}" Margin="0,5,0,2" />
-                        <TextBlock Text="{Binding SessionUsage, Converter={StaticResource PercentageTextConverter}}" Foreground="White" />
+                        <TextBlock x:Name="SessionUsageText" Text="{Binding Snapshot.SessionUsagePercentage, Converter={StaticResource PercentageTextConverter}}" Foreground="White" />
                     </StackPanel>
                     <StackPanel Grid.Column="1" Margin="8,0,0,0">
                         <TextBlock Text="Uso semanal" Foreground="{StaticResource MutedTextBrush}" />
                         <ProgressBar Minimum="0" Maximum="100" Value="{Binding WeeklyUsage, Mode=OneWay, FallbackValue=0, TargetNullValue=0}" Foreground="{Binding UsageBrush}" Margin="0,5,0,2" />
-                        <TextBlock Text="{Binding WeeklyUsage, Converter={StaticResource PercentageTextConverter}}" Foreground="White" />
+                        <TextBlock x:Name="WeeklyUsageText" Text="{Binding Snapshot.WeeklyUsagePercentage, Converter={StaticResource PercentageTextConverter}}" Foreground="White" />
                     </StackPanel>
                 </Grid>
 
@@ -184,7 +184,7 @@
                         <TextBlock Text="{Binding ModelLine}" Foreground="{StaticResource MutedTextBrush}" Margin="0,4,0,0" />
                         <TextBlock Text="{Binding StatusMessage}" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,8,0,0" />
                     </StackPanel>
-                    <Border Grid.Column="1" Background="#18191C" CornerRadius="6" Padding="8" Margin="12,0,0,0">
+                    <Border Grid.Column="1" ToolTip.Tip="{Binding UsageDetails}" Background="#18191C" CornerRadius="6" Padding="8" Margin="12,0,0,0">
                         <Polyline Points="{Binding HistoryPoints}" Stroke="{Binding UsageBrush}" StrokeThickness="2" Stretch="Fill" />
                     </Border>
                 </Grid>
